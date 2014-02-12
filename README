@@ -1,0 +1,4 @@
+Usage: volsbb [OPTION]
+
+-s, --setup	Setup Username & Password
+-h, --help	Show this help

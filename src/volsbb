@@ -1,0 +1,128 @@
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]
+then
+	echo "Usage: volsbb [OPTION]"
+	echo
+	echo -e "-s, --setup\tSetup Username & Password"
+	echo -e "-h, --help\tShow this help"
+elif [ "$1" = "-s" ] || [ "$1" = "--setup" ]
+then
+	read -p "Do you want to store Username? [YES/no]: " isUsername
+	if [ "$isUsername" != "no" ] && [ "$isUsername" != "NO" ]
+	then
+		read -p "Enter Username: " username
+	fi
+	
+	read -p "Do you want to store Password? (dangerous) [yes/NO]: " isPassword
+	if [ "$isPassword" = "yes" ] || [ "$isPassword" = "YES" ]
+	then
+		read -p "Enter Password: " password
+	fi
+	
+	rm ~/.volsbb/config &> /dev/null
+	mkdir ~/.volsbb &> /dev/null
+	touch ~/.volsbb/config &> /dev/null
+	
+	if [ "$isUsername" != "no" ] && [ "$isUsername" != "NO" ]
+	then
+		echo "U:" >> ~/.volsbb/config
+		echo $username >> ~/.volsbb/config
+	fi
+	if [ "$isPassword" = "yes" ] || [ "$isPassword" = "YES" ]
+	then
+		echo "P:" >> ~/.volsbb/config
+		echo $password >> ~/.volsbb/config
+	fi
+	
+else
+	echo -n "Checking connection to VOLSBB... "
+
+	ping -c 1 -w 3 "phc.prontonetworks.com" &> /dev/null
+
+	if [ "$?" -eq "0" ]
+	then
+		echo "Connected"
+	else
+		echo "Not Connected"
+		echo
+		echo "** Connect to VOLSBB to continue **"
+		exit
+	fi
+
+	echo -n "Checking login status... "
+
+	curl -s "http://phc.prontonetworks.com/cgi-bin/authlogin" | grep -q "You are already logged in"
+
+	if [ "$?" -eq "0" ]
+	then
+		echo "Logged In"
+		echo -n "Logging out... "
+		curl "http://phc.prontonetworks.com/cgi-bin/authlogout" &> /dev/null
+		if [ "$?" -eq "0" ]
+		then
+			echo "Done!"
+		else
+			echo "Error!"
+		fi
+	else
+		echo "Not Logged In"
+		
+		username=""
+		password=""
+		prevLine=""
+		while read line
+		do
+			if [ "$prevLine" = "U:" ]
+			then
+				username=$line
+			fi
+	
+			if [ "$prevLine" = "P:" ]
+			then
+				password=$line
+			fi
+
+			prevLine=$line
+		done < "$HOME/.volsbb/config"
+				
+		echo
+		if [ -z "$username" ]
+		then
+			read -p "Username: " username
+		fi
+		if [ -z "$password" ]
+		then
+			echo -n "Password: "
+			read -s password
+			echo
+		fi
+		
+		echo
+		echo -n "Logging in... "
+		result=$(curl -s --data-urlencode 'userId'="$username" --data-urlencode 'Submit22'='Login' --data-urlencode 'serviceName'='ProntoAuthentication' --data-urlencode 'password'="$password" "http://phc.prontonetworks.com/cgi-bin/authlogin")
+	
+		if [ "$?" -ne "0" ]
+		then
+			echo "Error!"
+		fi
+	
+		echo $result | grep -q "that account does not exist"	
+		if [ "$?" -eq "0" ]
+		then
+			echo
+			echo
+			echo "** Username does not exist **"
+			exit
+		fi
+	
+		echo $result | grep -q "please check your username and password"	
+		if [ "$?" -eq "0" ]
+		then
+			echo
+			echo
+			echo "** Wrong Password and Username combination **"
+			exit
+		fi
+	
+		echo "Done!"
+	fi
+fi
